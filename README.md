@@ -44,15 +44,29 @@ itself).
 - **17 MCP tools** over stdio (Model Context Protocol). Hermes or any
   MCP-compatible client can call `mcp__hermes_cu__*` directly:
 
-  | Perception | Action | Verify |
-  | --- | --- | --- |
-  | `list_windows` | `click` / `click_mark` | `screenshot` |
-  | `focus_window` | `double_click` / `right_click` | |
-  | `screen_snapshot` | `type_text` | |
-  | `find_text` | `press_key` | |
-  | `wait_for_text` | `hotkey` | |
-  | `list_marks` | `drag_to` | |
-  | | `scroll` / `move_to` | |
+  | # | Tool | Category | Description |
+  |---|------|----------|-------------|
+  | 1 | `list_windows` | Perception | List all top-level windows (title, pid, bounds, visibility) |
+  | 2 | `focus_window` | Perception | Bring a window to foreground by title pattern |
+  | 3 | `screen_snapshot` | Perception | Structured UIA tree of active/named window + all windows |
+  | 4 | `find_text` | Perception | Search UIA tree for elements by text, returns bounds + center |
+  | 5 | `wait_for_text` | Perception | Poll `find_text` until match appears or timeout fires |
+  | 6 | `list_marks` | Perception | Return set-of-marks index from most recent snapshot |
+  | 7 | `screenshot` | Verify | Save PNG screenshot (for vision-capable downstream tools) |
+  | 8 | `click` | Action | Click at absolute (x, y) coordinates |
+  | 9 | `click_mark` | Action | Click by set-of-marks integer id (e.g. `#5`) |
+  | 10 | `double_click` | Action | Double-click at (x, y) |
+  | 11 | `right_click` | Action | Right-click at (x, y) |
+  | 12 | `drag_to` | Action | Drag from (x1,y1) to (x2,y2) over duration seconds |
+  | 13 | `type_text` | Action | Type unicode text via clipboard paste |
+  | 14 | `press_key` | Action | Press a single key (enter, tab, esc, f5, etc.) |
+  | 15 | `hotkey` | Action | Press key combination (e.g. ctrl+c, alt+tab) |
+  | 16 | `scroll` | Action | Move cursor to (x,y) and scroll (dy>0=up) |
+  | 17 | `move_to` | Action | Move cursor to (x, y) — no blacklist check |
+
+  > **Set-of-marks** (v0.2+): every clickable element in `screen_snapshot` gets a
+  > sequential `[#N]` id. Prefer `click_mark(N)` over raw `click(x, y)` —
+  > fewer parsing errors, faster LLM decisions.
 
 - **Set-of-marks** (v0.2): every clickable element in a snapshot gets
   a sequential id. The LLM says `click_mark(5)` instead of parsing
