@@ -5,6 +5,15 @@ All notable changes to `hermes_cu` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-06-06
+
+### Fixed
+- **Windows spawn (P-2)**: Node.js `spawn(shell=false)` cannot spawn `.cmd`
+  files on Windows → `EINVAL`. Config must use `python.exe -m hermes_cu serve`
+  with `PYTHONPATH` env var set, not a `.cmd` wrapper.
+  - Affects: mavis daemon MCP config, Hermes config.yaml.
+  - Config updated: `python.exe` direct + `PYTHONPATH` env var.
+
 ## [0.2.0] - 2026-06-06
 
 ### Added

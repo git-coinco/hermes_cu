@@ -4,12 +4,15 @@
     "hermes_cu": {
       "command": "C:/Users/CLL/.hermes/hermes-agent/venv/Scripts/python.exe",
       "args": ["-m", "hermes_cu", "serve"],
-      "cwd": "D:/Hermes_Backup/mavis-outputs/scripts",
+      "env": {
+        "PYTHONPATH": "D:/Hermes_Backup/github/hermes_cu",
+        "PYTHONIOENCODING": "utf-8"
+      },
       "transport": "stdio",
       "_about": {
         "name": "hermes_cu",
-        "purpose": "No-vision computer-use client (UIA + pyautogui) for text-only LLM agents",
-        "tools": 14,
+        "purpose": "No-vision computer-use client (UIA + pyautogui, set-of-marks) for text-only LLM agents",
+        "tools": 17,
         "requires": ["pywinauto", "pyautogui", "mss", "pywin32", "Pillow"],
         "tested_with": "Python 3.12.10, Windows 11 23H2",
         "owner_safe": "Default blacklist blocks MiniMax Code / 微信 / Edge / Chrome / 飞书 / Slack / Telegram / QQ / taskbar."

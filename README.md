@@ -82,13 +82,21 @@ Requires Windows 10/11 and Python ≥ 3.11.
 {
   "mcpServers": {
     "hermes_cu": {
-      "command": "python",
+      "command": "C:/Users/CLL/.hermes/hermes-agent/venv/Scripts/python.exe",
       "args": ["-m", "hermes_cu", "serve"],
-      "cwd": "C:/path/to/your/scripts"
+      "env": {
+        "PYTHONPATH": "C:/path/to/hermes_cu",
+        "PYTHONIOENCODING": "utf-8"
+      }
     }
   }
 }
 ```
+
+> ⚠️ **Windows spawn note**: If your MCP client uses Node.js `spawn(shell=false)`
+> (common in Electron-based tools), you **must** use `python.exe` directly.
+> `.cmd` / `.bat` wrappers cause `EINVAL` with `shell:false` on Windows.
+> See [CHANGELOG.md](CHANGELOG.md) for details.
 
 Hermes will see 17 tools prefixed `mcp__hermes_cu__*`.
 
