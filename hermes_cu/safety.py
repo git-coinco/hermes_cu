@@ -35,8 +35,8 @@ DEFAULT_BLACKLIST: tuple[str, ...] = (
     " - Google Chrome",
     "Mozilla Firefox",
     # Communication
-    "微信",  # WeChat
-    "WeChat",
+    # "微信",  # WeChat — WHITELISTED 2026-06-06 (owner approval)
+    # "WeChat",
     "钉钉",
     "DingTalk",
     "飞书",
@@ -51,6 +51,12 @@ DEFAULT_BLACKLIST: tuple[str, ...] = (
     "Windows 任务栏",
     "Action Center",
     "通知中心",
+)
+
+# Windows that override the blacklist — owner approved for automation.
+DEFAULT_WHITELIST: tuple[str, ...] = (
+    "微信",
+    "WeChat",
 )
 
 
@@ -76,7 +82,7 @@ class SafetyGuard:
 
     blacklist: tuple[str, ...] = field(default_factory=lambda: DEFAULT_BLACKLIST)
     regex: bool = False
-    whitelist: tuple[str, ...] = field(default_factory=tuple)
+    whitelist: tuple[str, ...] = field(default_factory=lambda: DEFAULT_WHITELIST)
     require_focus: bool = True
 
     # --- matching primitives ---------------------------------------------
