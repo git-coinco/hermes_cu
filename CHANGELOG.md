@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - 2026-06-06
 
+## [0.3.0] - 2026-06-06
+
+### Added
+- **`screenshot_window`** — Capture a named window to PNG. Uses `mss`
+  (fast, no-GPU) with `win32ui.PrintWindow` fallback for GPU-accelerated
+  windows. Returns structured result: `gpu_detected`, `content_ratio`,
+  `size`, `title`. `content_ratio > 0.1` confirms real content captured.
+  - Verified: Edge (content_ratio=0.495), WeChat (content_ratio=0.615)
+  - WeChat remains content_ratio=0.039 (Qt engine blocks PrintWindow)
+- **`wechat_status`** — Diagnostic tool: check if WeChat is running,
+  focused, and what process model is active (float/child_process).
+  Intended for hermes_cu pipeline detection of WeChat state before
+  screenshot/click actions.
+
+### Known limits documented
+- Edge/Chrome/Chromium: no UIA tree (find_text returns `[]`).
+  Use `screenshot_window` + vision downstream, or Playwright MCP for DOM.
+- Browser automation: use Playwright MCP (`mcp__playwright__*`),
+  not hermes_cu. The two tools are complementary.
+
 ### Fixed
 - **Windows spawn (P-2)**: Node.js `spawn(shell=false)` cannot spawn `.cmd`
   files on Windows → `EINVAL`. Config must use `python.exe -m hermes_cu serve`

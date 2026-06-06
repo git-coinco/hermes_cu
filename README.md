@@ -144,10 +144,22 @@ Hermes will see 17 tools prefixed `mcp__hermes_cu__*`.
 
 - **UWP / Electron / WebView2 windows expose no UIA element tree** on
   Windows 11 24H2+. This is a Microsoft design choice, not a `hermes_cu`
-  bug. The agent can still see the window title, but `find_text` returns
-  `[]` inside e.g. the modern Calculator, mspaint, MiniMax Code, Edge,
-  Chrome, File Explorer. For those targets, use a vision-capable
-  downstream tool or accept coordinate-only control.
+  bug. `find_text` returns `[]` inside Calculator, mspaint, MiniMax Code,
+  Edge, Chrome, File Explorer. For those targets: use `screenshot_window`
+  (mss-based PNG capture, bypasses GPU acceleration) + a vision-capable
+  LLM downstream, or use Playwright MCP for browser DOM automation.
+- **`screenshot_window`** (v0.3+) uses `mss` with GPU-acceleration detection
+  to fall back to `win32ui.PrintWindow` — this captures content even for
+  GPU-accelerated windows where direct GDI screenshots are blank.
+  `content_ratio > 0.1` confirms real content; `content_ratio < 0.1` means
+  the window content is inaccessible (e.g. WeChat internal render).
+- **Browser DOM / text reading**: Edge/Chrome webpages require CDP
+  (Chrome DevTools Protocol) for DOM text. `find_text` is UIA-only.
+  Use **Playwright MCP** (`mcp__playwright__*`) for full browser automation
+  including DOM access, navigation, and cookie-aware page interaction.
+  hermes_cu and Playwright MCP are complementary: hermes_cu for desktop
+  apps + screenshots, Playwright MCP for browser tabs.
+- **Hidden / minimized windows** return `bounds=[0,0,0,0]`.
 - **Hidden / minimized windows** return `bounds=[0,0,0,0]`.
 - **Active-window checks are best-effort.** A malicious or runaway agent
   could `focus_window` then immediately `click` before anyone notices.
