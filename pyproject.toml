@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes_cu"
+version = "0.2.0"
+description = "No-vision computer-use client for text-only LLM agents (Windows, UIA + pyautogui)."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Hermes Contributors" },
+]
+keywords = ["computer-use", "agent", "mcp", "uia", "pywinauto", "pyautogui", "windows"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pyautogui>=0.9.54",
+    "pywinauto>=0.6.9",
+    "mss>=10.0",
+    "pywin32>=306",
+    "Pillow>=10.0",
+    "mcp>=1.0",
+]
+
+[project.scripts]
+hermes-cu = "hermes_cu.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/hermes-contributors/hermes_cu"
+Changelog = "https://github.com/hermes-contributors/hermes_cu/blob/main/CHANGELOG.md"
+Issues = "https://github.com/hermes-contributors/hermes_cu/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hermes_cu*"]
+exclude = ["tests*"]

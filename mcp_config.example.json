@@ -1,0 +1,19 @@
+{
+  "_comment": "MCP config snippet for registering hermes_cu with Hermes or any MCP client. Drop into the parent's mcp_config.json under mcpServers.",
+  "mcpServers": {
+    "hermes_cu": {
+      "command": "C:/Users/CLL/.hermes/hermes-agent/venv/Scripts/python.exe",
+      "args": ["-m", "hermes_cu", "serve"],
+      "cwd": "D:/Hermes_Backup/mavis-outputs/scripts",
+      "transport": "stdio",
+      "_about": {
+        "name": "hermes_cu",
+        "purpose": "No-vision computer-use client (UIA + pyautogui) for text-only LLM agents",
+        "tools": 14,
+        "requires": ["pywinauto", "pyautogui", "mss", "pywin32", "Pillow"],
+        "tested_with": "Python 3.12.10, Windows 11 23H2",
+        "owner_safe": "Default blacklist blocks MiniMax Code / 微信 / Edge / Chrome / 飞书 / Slack / Telegram / QQ / taskbar."
+      }
+    }
+  }
+}
