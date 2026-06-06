@@ -489,6 +489,135 @@ class ComputerUse:
         except Exception as e:
             return ActionResult(ok=False, action="screenshot", detail=f"screenshot failed: {e}")
 
+    # -------------------------------------------------------------------------
+    # GPU-aware window screenshot (v0.3)
+    # -------------------------------------------------------------------------
+
+    def screenshot_window(self, title_pattern: str, path: str) -> ActionResult:
+        """Screenshot a specific window by title pattern, with GPU-render detection.
+
+        Returns a result that includes:
+        - path: where the image was saved
+        - gpu_detected: bool — True if the screenshot appears mostly blank
+                         (likely GPU-accelerated Qt/Chromium/Electron app)
+        - content_ratio: fraction of non-white pixels (0.0-1.0)
+        - suggestion: what to do next if GPU-rendered
+        """
+        import ctypes
+        import struct
+        from PIL import Image as PILImage
+
+        user32 = ctypes.windll.user32
+
+        # Find window
+        try:
+            win = self._find_window(title_pattern)
+            hwnd = win.handle
+        except ValueError:
+            return ActionResult(ok=False, action="screenshot_window",
+                               detail=f"no window matches '{title_pattern}'")
+
+        # Bring to front
+        try:
+            win.set_focus()
+            time.sleep(0.3)
+        except Exception:
+            pass
+
+        # Get window rect
+        rect = ctypes.create_string_buffer(16)
+        user32.GetWindowRect(hwnd, rect)
+        left, top, right, bottom = struct.unpack("4l", rect.raw)
+        w, h = right - left, bottom - top
+        if w <= 0 or h <= 0:
+            return ActionResult(ok=False, action="screenshot_window",
+                               detail=f"invalid window size {w}x{h}")
+
+        # Capture: try mss first (GPU-aware), fallback to win32ui PrintWindow
+        img = None
+        error_detail = ""
+        try:
+            mss_lib = _import_mss()
+            with mss_lib.mss() as sct:
+                monitor = {"left": left, "top": top, "width": w, "height": h}
+                shot = sct.grab(monitor)
+                # mss returns BGRA; strip alpha then save
+                rgb = shot.bgra[..., :3].tobytes() if hasattr(shot.bgra, "tobytes") \
+                    else bytes(shot.bgra)[:w * h * 3]
+                img = PILImage.frombytes("RGB", shot.size, rgb)
+                img.save(path)
+        except Exception as e:
+            error_detail = str(e)
+
+        # Fallback: win32ui PrintWindow
+        if img is None:
+            try:
+                win32ui = __import__("win32ui", fromlist=[""])
+                desktop_hdc = user32.GetDC(0)
+                desktop_pydc = win32ui.CreateDCFromHandle(desktop_hdc)
+                memdc = win32ui.CreateCompatibleDC(desktop_pydc)
+                bmp = win32ui.CreateBitmap()
+                bmp.CreateCompatibleBitmap(desktop_pydc, w, h)
+                memdc.SelectObject(bmp.GetSafeHdc())
+                user32.PrintWindow(hwnd, memdc.GetSafeHdc(), 2)
+                bmpinfo = bmp.GetInfo()
+                bmpstr = bmp.GetBitmapBits(True)
+                img = PILImage.frombuffer("RGB",
+                    (bmpinfo["bmWidth"], bmpinfo["bmHeight"]),
+                    bmpstr, "raw", "BGRX", 0, 1)
+                img.save(path)
+                win32ui.DeleteObject(bmp.GetSafeHandle())
+                memdc.DeleteDC()
+                user32.ReleaseDC(0, desktop_hdc)
+            except Exception as e2:
+                return ActionResult(ok=False, action="screenshot_window",
+                                   detail=f"screenshot failed: {error_detail} / {e2}")
+
+        # Analyze content
+        content_ratio, is_gpu = self._analyze_screenshot(img)
+        suggestion = ""
+        if is_gpu:
+            suggestion = (
+                "This window is GPU-accelerated (Qt/Chromium/Electron). "
+                "Standard screenshots show blank/white content. "
+                "For GPU apps: (1) Use Windows.Graphics.Capture API, "
+                "(2) Read text via clipboard (Win+C) then paste, or "
+                "(3) Use a dedicated app bridge (e.g., wxauto for WeChat). "
+                "UIA automation typically returns no elements for GPU apps."
+            )
+
+        return ActionResult(
+            ok=True, action="screenshot_window", detail=path,
+            data={
+                "path": path,
+                "title": win.window_text(),
+                "gpu_detected": is_gpu,
+                "content_ratio": round(content_ratio, 3),
+                "size": {"width": w, "height": h},
+                "suggestion": suggestion,
+            }
+        )
+
+    def _analyze_screenshot(self, img: "PILImage.Image") -> tuple[float, bool]:
+        """Return (content_ratio, is_gpu) where is_gpu=True if mostly blank.
+
+        Samples every 10th pixel. A screenshot with <5% non-white pixels
+        is almost certainly GPU-rendered content that the capture API missed.
+        """
+        w, h = img.size
+        total = 0
+        white = 0
+        step = max(1, min(w, h) // 50)  # adaptive step
+        for y in range(0, h, step):
+            for x in range(0, w, step):
+                r, g, b = img.getpixel((x, y))[:3]
+                total += 1
+                if r > 245 and g > 245 and b > 245:
+                    white += 1
+        ratio = 1.0 - (white / max(total, 1))
+        is_gpu = ratio < 0.05  # <5% non-white
+        return ratio, is_gpu
+
     # =====================================================================
     # ACTION
     # =====================================================================
