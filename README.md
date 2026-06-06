@@ -53,16 +53,26 @@ itself).
   | 5 | `wait_for_text` | Perception | Poll `find_text` until match appears or timeout fires |
   | 6 | `list_marks` | Perception | Return set-of-marks index from most recent snapshot |
   | 7 | `screenshot` | Verify | Save PNG screenshot (for vision-capable downstream tools) |
-  | 8 | `click` | Action | Click at absolute (x, y) coordinates |
-  | 9 | `click_mark` | Action | Click by set-of-marks integer id (e.g. `#5`) |
-  | 10 | `double_click` | Action | Double-click at (x, y) |
-  | 11 | `right_click` | Action | Right-click at (x, y) |
-  | 12 | `drag_to` | Action | Drag from (x1,y1) to (x2,y2) over duration seconds |
-  | 13 | `type_text` | Action | Type unicode text via clipboard paste |
-  | 14 | `press_key` | Action | Press a single key (enter, tab, esc, f5, etc.) |
-  | 15 | `hotkey` | Action | Press key combination (e.g. ctrl+c, alt+tab) |
-  | 16 | `scroll` | Action | Move cursor to (x,y) and scroll (dy>0=up) |
-  | 17 | `move_to` | Action | Move cursor to (x, y) — no blacklist check |
+  | 8 | `screenshot_window` | Verify | Screenshot a named window with GPU-acceleration detection |
+  | 9 | `click` | Action | Click at absolute (x, y) coordinates |
+  | 10 | `click_mark` | Action | Click by set-of-marks integer id (e.g. `#5`) |
+  | 11 | `double_click` | Action | Double-click at (x, y) |
+  | 12 | `right_click` | Action | Right-click at (x, y) |
+  | 13 | `drag_to` | Action | Drag from (x1,y1) to (x2,y2) over duration seconds |
+  | 14 | `type_text` | Action | Type unicode text via clipboard paste |
+  | 15 | `press_key` | Action | Press a single key (enter, tab, esc, f5, etc.) |
+  | 16 | `hotkey` | Action | Press key combination (e.g. ctrl+c, alt+tab) |
+  | 17 | `scroll` | Action | Move cursor to (x,y) and scroll (dy>0=up) |
+  | 18 | `move_to` | Action | Move cursor to (x, y) — no blacklist check |
+  | 19 | `clipboard_read` | System | Read text from Windows clipboard (tkinter) |
+  | 20 | `clipboard_write` | System | Write text to Windows clipboard (tkinter) |
+  | 21 | `window_control` | System | Minimize / maximize / restore / close / show / hide a window |
+  | 22 | `list_processes` | System | List top N processes by memory usage (tasklist + psapi) |
+  | 23 | `browse_dir` | System | List directory contents with type, size, modified time |
+  | 24 | `read_file` | System | Read text file (up to max_bytes, truncated flag) |
+  | 25 | `write_file` | System | Write text to file, creates parent dirs if needed |
+  | 26 | `run_command` | System | Run shell command, return stdout + stderr + returncode |
+  | 27 | `wechat_status` | WeChat | Check WeChat window state and GPU-render detection |
 
   > **Set-of-marks** (v0.2+): every clickable element in `screen_snapshot` gets a
   > sequential `[#N]` id. Prefer `click_mark(N)` over raw `click(x, y)` —

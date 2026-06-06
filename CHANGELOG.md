@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - 2026-06-06
 
-## [0.3.0] - 2026-06-06
+## [0.4.0] - 2026-06-06
+
+### Added (8 new system tools)
+- **`clipboard_read`** — Read text from Windows clipboard via tkinter.
+  Use to capture text from any application (browser, WeChat, file manager).
+- **`clipboard_write`** — Write text to Windows clipboard via tkinter.
+  Use to prepare text for Ctrl+V pasting into any application.
+- **`window_control`** — Minimize / maximize / restore / close / show / hide
+  any named window via raw Win32 SendMessage. Bypasses safety guard
+  intentionally (window control is deliberate).
+- **`list_processes`** — List top N processes sorted by memory usage via
+  `tasklist` (names) + `EnumProcesses`/`psapi` (memory). Shows pid, name,
+  memory_mb. Essential for checking if an app (WeChat, Chrome, Douyin) is running.
+- **`browse_dir`** — List directory contents with type, size, modified time.
+  Use to navigate the file system, find uploaded files, check output directories.
+- **`read_file`** — Read text file contents (up to max_bytes). Returns
+  {ok, content, size, truncated}. For scripts, configs, output files, etc.
+- **`write_file`** — Write text to file, creates parent directories as needed.
+  Returns {ok, path, bytes_written}. For saving scripts, configs, generated content.
+- **`run_command`** — Run a shell command and return stdout + stderr + returncode.
+  Use for git, pip, node, python, curl, powershell, etc.
+
+### Changed
+- README tool table: 17 tools → **27 tools** (added screenshot_window + 8 system tools)
 
 ### Added
 - **`screenshot_window`** — Capture a named window to PNG. Uses `mss`

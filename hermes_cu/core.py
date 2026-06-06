@@ -804,6 +804,353 @@ class ComputerUse:
         self._log_action("move_to", {"x": x, "y": y}, r)
         return r
 
+    # ---------------------------------------------------------------------------
+    # System tools: clipboard, file system, process, window control
+    # ---------------------------------------------------------------------------
+
+    def clipboard_read(self) -> dict[str, Any]:
+        """Read text from the Windows clipboard. Returns {ok, text, error}."""
+        try:
+            import tkinter
+            root = tkinter.Tk()
+            root.withdraw()
+            try:
+                text = root.clipboard_get()
+            except Exception:
+                text = ""
+            finally:
+                root.destroy()
+            return {"ok": True, "text": text or "", "format": "unicode", "chars": len(text)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def clipboard_write(self, text: str) -> dict[str, Any]:
+        """Write text to the Windows clipboard. Returns {ok, error}."""
+        try:
+            import ctypes, subprocess
+
+            # Method 1: PowerShell (most reliable on Windows)
+            # Escape for PowerShell: replace ' with '' and handle special chars
+            escaped = text.replace("'", "''").replace("\r\n", "`n").replace("\n", "`n").replace("\r", "`n")
+            ps_cmd = (
+                "Set-Clipboard -Value '" + escaped + "'"
+                if len(escaped) < 1000
+                else (
+                    "$temp = [System.IO.Path]::GetTempFileName(); "
+                    "[System.IO.File]::WriteAllText($temp, $null, [System.Text.Encoding]::UTF8); "
+                    "[System.IO.File]::WriteAllText($temp, $input, [System.Text.Encoding]::UTF8); "
+                    "Get-Content $temp -Raw | Set-Clipboard; Remove-Item $temp"
+                )
+            )
+
+            # Try PowerShell pipe method for long text
+            if len(escaped) >= 1000:
+                proc = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", "-"],
+                    input=text,
+                    capture_output=True,
+                    encoding="utf-16-le",
+                    errors="replace",
+                )
+                if proc.returncode == 0:
+                    # pipe to Set-Clipboard
+                    pipe_proc = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", "Set-Clipboard"],
+                        input=text.encode("utf-16-le"),
+                        capture_output=True,
+                    )
+                    if pipe_proc.returncode == 0:
+                        return {"ok": True, "chars": len(text), "method": "powershell-pipe"}
+                    return {"ok": False, "error": "powershell-pipe failed: " + proc.stderr.decode(errors="replace")}
+
+            # Method 2: ctypes Win32 API (for shorter text)
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+
+            GMEM_MOVEABLE = 0x0002
+            CF_UNICODETEXT = 13
+
+            # Set proper return types (critical on 64-bit Python)
+            kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+            kernel32.GlobalAlloc.restype = ctypes.c_void_p
+            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalUnlock.restype = ctypes.c_bool
+            user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+            user32.SetClipboardData.restype = ctypes.c_void_p
+
+            if not user32.OpenClipboard(None):
+                return {"ok": False, "error": "OpenClipboard failed"}
+
+            try:
+                user32.EmptyClipboard()
+                encoded = text.encode("utf-16-le")
+                size = len(encoded)
+
+                h = kernel32.GlobalAlloc(GMEM_MOVEABLE, size)
+                if not h:
+                    return {"ok": False, "error": "GlobalAlloc returned NULL"}
+
+                buf = kernel32.GlobalLock(h)
+                if not buf:
+                    kernel32.GlobalFree(h)
+                    return {"ok": False, "error": "GlobalLock returned NULL"}
+
+                ctypes.memmove(buf, encoded, size)
+                kernel32.GlobalUnlock(h)
+
+                if not user32.SetClipboardData(CF_UNICODETEXT, h):
+                    kernel32.GlobalFree(h)
+                    return {"ok": False, "error": "SetClipboardData failed"}
+
+                return {"ok": True, "chars": len(text), "method": "win32"}
+            finally:
+                user32.CloseClipboard()
+
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def window_control(
+        self, title_pattern: str, action: str
+    ) -> ActionResult:
+        """Control a window: minimize | maximize | restore | close | show | hide.
+
+        Uses raw Win32 API — bypasses the safety guard intentionally.
+        Blacklist is NOT checked here (window control is deliberate).
+        """
+        WM_CLOSE = 0x0010
+        WM_SYSCOMMAND = 0x0112
+        SC_MINIMIZE = 0xF020
+        SC_MAXIMIZE = 0xF030
+        SC_RESTORE = 0xF120
+
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+
+            hwnd = self._find_window(title_pattern)
+            if not hwnd:
+                return ActionResult(
+                    ok=False, action="window_control",
+                    detail=f"No window matching '{title_pattern}' found."
+                )
+
+            action_map = {
+                "minimize": (WM_SYSCOMMAND, SC_MINIMIZE),
+                "maximize": (WM_SYSCOMMAND, SC_MAXIMIZE),
+                "restore": (WM_SYSCOMMAND, SC_RESTORE),
+                "close": (WM_CLOSE, 0),
+                "show": (7, 0),    # SW_SHOW
+                "hide": (8, 0),    # SW_HIDE
+            }
+
+            if action not in action_map:
+                return ActionResult(
+                    ok=False, action="window_control",
+                    detail=f"Unknown action '{action}'. "
+                           f"Valid: {list(action_map.keys())}"
+                )
+
+            msg, wparam = action_map[action]
+            if msg == WM_CLOSE:
+                user32.SendMessageW(hwnd, msg, 0, 0)
+            elif msg == WM_SYSCOMMAND:
+                user32.SendMessageW(hwnd, msg, wparam, 0)
+            else:
+                user32.ShowWindow(hwnd, msg)
+
+            return ActionResult(
+                ok=True, action="window_control",
+                detail=f"{action} sent to window {hwnd}",
+                data={"hwnd": hwnd, "title_pattern": title_pattern, "action": action}
+            )
+        except Exception as e:
+            return ActionResult(ok=False, action="window_control", detail=str(e))
+
+    def list_processes(self, limit: int = 30) -> dict[str, Any]:
+        """List top N running processes by memory usage. Returns {ok, processes}."""
+        try:
+            import ctypes, subprocess
+
+            # Method 1: tasklist (most reliable for name + memory on Windows)
+            r = subprocess.run(
+                ["tasklist", "/FO", "CSV", "/NH"],
+                capture_output=True, encoding="gbk", errors="replace", timeout=10
+            )
+            if r.returncode == 0:
+                tasklist_map = {}
+                for line in r.stdout.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        import csv, io
+                        reader = csv.reader(io.StringIO(line))
+                        row = next(reader)
+                        name = row[0].strip()
+                        pid = int(row[1].strip())
+                        # Memory is last column, like "12,432 K" or "68 K"
+                        raw_mem = row[-1].strip()
+                        # Remove commas and 'K'/'M' suffix
+                        mem_num = raw_mem.replace(",", "").replace(" ", "").rstrip("KkMm")
+                        working_set = int(mem_num) * 1024 if mem_num.isdigit() else 0
+                        tasklist_map[pid] = (name, working_set)
+                    except (ValueError, IndexError, csv.Error):
+                        continue
+
+            # Method 2: EnumProcesses + OpenProcess for memory (always works)
+            psapi = ctypes.windll.psapi
+            kernel32 = ctypes.windll.kernel32
+
+            MAX_PROCESSES = 1024
+            bytes_returned = ctypes.c_ulong()
+            pids = (ctypes.c_ulong * MAX_PROCESSES)()
+            psapi.EnumProcesses(ctypes.byref(pids), ctypes.sizeof(pids), ctypes.byref(bytes_returned))
+            count = bytes_returned.value // ctypes.sizeof(ctypes.c_ulong)
+
+            class PMC(ctypes.Structure):
+                _fields_ = [
+                    ("cb", ctypes.c_ulong),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                ]
+
+            pmc = PMC()
+            pmc.cb = ctypes.sizeof(PMC)
+            PROCESS_QUERY_INFO = 0x0400
+
+            processes = []
+            seen = set()
+            for i in range(count):
+                pid = int(pids[i])
+                if pid in seen or pid == 0:
+                    continue
+                seen.add(pid)
+
+                name, working_set = tasklist_map.get(pid, (f"<pid={pid}>", 0))
+
+                try:
+                    h = kernel32.OpenProcess(PROCESS_QUERY_INFO, False, pid)
+                    if h:
+                        try:
+                            if working_set == 0:  # try to get memory via psapi
+                                if psapi.GetProcessMemoryInfo(h, ctypes.byref(pmc), pmc.cb):
+                                    working_set = pmc.WorkingSetSize
+                        finally:
+                            kernel32.CloseHandle(h)
+                except Exception:
+                    pass
+
+                if working_set == 0 and pid in tasklist_map:
+                    working_set = tasklist_map[pid][1]
+
+                processes.append({
+                    "pid": pid,
+                    "name": name,
+                    "memory_mb": round(working_set / (1024 * 1024), 1),
+                })
+
+            # Sort by memory, take top N
+            processes.sort(key=lambda x: x["memory_mb"], reverse=True)
+            return {"ok": True, "processes": processes[:limit], "total_found": len(processes)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def browse_dir(self, path: str = ".") -> dict[str, Any]:
+        """List directory contents with type, size, modified time. Returns {ok, entries, path}."""
+        try:
+            p = Path(path).expanduser().resolve()
+            if not p.exists():
+                return {"ok": False, "error": f"Path does not exist: {p}"}
+            if not p.is_dir():
+                return {"ok": False, "error": f"Not a directory: {p}"}
+
+            entries = []
+            for item in sorted(p.iterdir()):
+                try:
+                    stat = item.stat()
+                    entries.append({
+                        "name": item.name,
+                        "type": "dir" if item.is_dir() else "file",
+                        "size_bytes": stat.st_size if item.is_file() else 0,
+                        "modified": stat.st_mtime,
+                        "ext": item.suffix.lower() if item.is_file() else "",
+                    })
+                except PermissionError:
+                    continue
+
+            return {
+                "ok": True,
+                "path": str(p),
+                "parent": str(p.parent),
+                "entries": entries,
+                "total": len(entries),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def read_file(self, path: str, max_bytes: int = 50000) -> dict[str, Any]:
+        """Read text file contents. Returns {ok, content, truncated, size, path}."""
+        try:
+            p = Path(path).expanduser().resolve()
+            if not p.exists():
+                return {"ok": False, "error": f"File not found: {p}"}
+            if not p.is_file():
+                return {"ok": False, "error": f"Not a file: {p}"}
+
+            size = p.stat().st_size
+            truncated = size > max_bytes
+
+            try:
+                content = p.read_text(encoding="utf-8", errors="replace")
+                if truncated:
+                    content = content[:max_bytes]
+            except Exception:
+                content = "<binary file, cannot read as text>"
+
+            return {
+                "ok": True,
+                "path": str(p),
+                "size": size,
+                "truncated": truncated,
+                "content": content,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def write_file(self, path: str, content: str, *, encoding: str = "utf-8") -> dict[str, Any]:
+        """Write text content to a file. Creates parent dirs if needed. Returns {ok, path, bytes_written}."""
+        try:
+            p = Path(path).expanduser().resolve()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content, encoding=encoding)
+            return {"ok": True, "path": str(p), "bytes_written": len(content.encode(encoding))}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def run_command(self, command: str, timeout: float = 30.0) -> dict[str, Any]:
+        """Run a shell command and return stdout+stderr. Returns {ok, stdout, stderr, returncode}."""
+        try:
+            import subprocess
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                timeout=timeout,
+                encoding="utf-8",
+                errors="replace",
+            )
+            return {
+                "ok": result.returncode == 0,
+                "returncode": result.returncode,
+                "stdout": result.stdout or "",
+                "stderr": result.stderr or "",
+            }
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": f"Command timed out after {timeout}s", "returncode": -1}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "returncode": -1}
+
 
 # ---------------------------------------------------------------------------
 # Convenience: pretty-print snapshots for the LLM

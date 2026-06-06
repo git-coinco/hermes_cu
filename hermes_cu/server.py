@@ -431,6 +431,135 @@ TOOLS: list[Tool] = [
             "additionalProperties": False,
         },
     ),
+    Tool(
+        name="clipboard_read",
+        description=(
+            "Read text from the Windows clipboard. Returns the text content. "
+            "Use this to capture text copied from any application (browser, "
+            "WeChat, file manager, etc.)."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="clipboard_write",
+        description=(
+            "Write text to the Windows clipboard. Use this to prepare text "
+            "for pasting (Ctrl+V) into any application. The agent can then "
+            "focus a window and use type_text, or paste directly."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+            },
+            "required": ["text"],
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="window_control",
+        description=(
+            "Control a window's state: minimize | maximize | restore | close | show | hide. "
+            "Takes a title pattern (case-insensitive substring) and action. "
+            "Blacklist is bypassed — this is a deliberate window management action. "
+            "Use close to shut down a dialog, minimize to hide an app, etc."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "title_pattern": {"type": "string"},
+                "action": {"type": "string",
+                           "enum": ["minimize", "maximize", "restore", "close", "show", "hide"]},
+            },
+            "required": ["title_pattern", "action"],
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="list_processes",
+        description=(
+            "List top N running processes sorted by memory usage. "
+            "Returns pid, name, memory_mb. Useful to check if an app is running "
+            "(e.g. WeChat, Chrome, Douyin) before interacting with it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "default": 30, "minimum": 1, "maximum": 100},
+            },
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="browse_dir",
+        description=(
+            "List a directory's contents with type, size, and modified time. "
+            "Returns sorted list of entries. Use to explore the file system, "
+            "find uploaded files, check output directories, etc."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Directory path (default: current dir)."},
+            },
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="read_file",
+        description=(
+            "Read a text file's contents. Returns up to max_bytes of text. "
+            "Use to read scripts, configs, output files, uploaded content, etc. "
+            "Returns truncated=true if the file was cut."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "max_bytes": {"type": "integer", "default": 50000, "minimum": 1, "maximum": 1000000},
+            },
+            "required": ["path"],
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="write_file",
+        description=(
+            "Write text content to a file. Creates parent directories if needed. "
+            "Use to save scripts, configs, generated content, logs, etc."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"},
+                "encoding": {"type": "string", "default": "utf-8"},
+            },
+            "required": ["path", "content"],
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="run_command",
+        description=(
+            "Run a shell command and return stdout+stderr+returncode. "
+            "Use for git, pip, node, python, curl, powershell, etc. "
+            "Timeout 30s default. For long-running commands increase timeout."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "timeout": {"type": "number", "default": 30.0, "minimum": 1.0, "maximum": 300.0},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+    ),
 ]
 
 
@@ -520,6 +649,36 @@ def build_server() -> Server:
                 return _to_text(r.to_dict())
             if name == "wechat_status":
                 return _to_text(_wechat_status())
+            if name == "clipboard_read":
+                return _to_text(cu.clipboard_read())
+            if name == "clipboard_write":
+                return _to_text(cu.clipboard_write(arguments["text"]))
+            if name == "window_control":
+                return _to_text(cu.window_control(
+                    arguments["title_pattern"], arguments["action"]
+                ).to_dict())
+            if name == "list_processes":
+                return _to_text(cu.list_processes(
+                    int(arguments.get("limit", 30))
+                ))
+            if name == "browse_dir":
+                return _to_text(cu.browse_dir(arguments.get("path", ".")))
+            if name == "read_file":
+                return _to_text(cu.read_file(
+                    arguments["path"],
+                    int(arguments.get("max_bytes", 50000)),
+                ))
+            if name == "write_file":
+                return _to_text(cu.write_file(
+                    arguments["path"],
+                    arguments["content"],
+                    encoding=arguments.get("encoding", "utf-8"),
+                ))
+            if name == "run_command":
+                return _to_text(cu.run_command(
+                    arguments["command"],
+                    float(arguments.get("timeout", 30.0)),
+                ))
             return _to_text({"ok": False, "error": f"unknown tool '{name}'"})
         except Exception as e:  # last-resort safety net
             log.exception("tool %s failed", name)
